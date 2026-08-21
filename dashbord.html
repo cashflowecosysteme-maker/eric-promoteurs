@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <link rel="icon" type="image/png" href="/FavIcon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NyXia IA — Éric Promoteur </title>
+  <title>NyXia — Éric Promoteur</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,6 +44,59 @@
     .btn-pro { background: linear-gradient(135deg, var(--gold), #e6a800); color: #1a1000; }
     .btn-logout { background: rgba(255,75,110,0.1); border: 1px solid rgba(255,75,110,0.25); color: #ff8fab; }
     .btn-logout:hover { background: rgba(255,75,110,0.2); }
+
+    body.eric-access-pending > header,
+    body.eric-access-pending > .app-body,
+    body.eric-access-expired > header,
+    body.eric-access-expired > .app-body,
+    body.eric-access-expired > #mobile-menu-backdrop { visibility: hidden; }
+    .eric-expired-screen[hidden] { display: none; }
+    .eric-expired-screen {
+      position: fixed; inset: 0; z-index: 10000;
+      display: grid; place-items: center; padding: 24px;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(123,92,255,.24), transparent 38%),
+        radial-gradient(circle at 82% 82%, rgba(79,163,255,.14), transparent 36%),
+        linear-gradient(145deg, #060b19 0%, #0b1730 55%, #101b3f 100%);
+    }
+    .eric-expired-card {
+      width: min(560px, 100%); padding: 42px 38px; text-align: center;
+      border: 1px solid rgba(167,139,250,.32); border-radius: 24px;
+      background: rgba(10,22,40,.88); backdrop-filter: blur(22px);
+      box-shadow: 0 28px 90px rgba(0,0,0,.48), 0 0 50px rgba(123,92,255,.13);
+    }
+    .eric-expired-emblem {
+      width: 76px; height: 76px; margin: 0 auto 20px; border-radius: 50%;
+      display: grid; place-items: center; font-size: 34px; color: #f7d56c;
+      border: 1px solid rgba(244,200,66,.45);
+      background: radial-gradient(circle, rgba(244,200,66,.16), rgba(123,92,255,.12));
+      box-shadow: 0 0 34px rgba(244,200,66,.16);
+    }
+    .eric-expired-eyebrow {
+      color: #a78bfa; font-size: 11px; font-weight: 800;
+      letter-spacing: 2.2px; text-transform: uppercase; margin-bottom: 12px;
+    }
+    .eric-expired-card h1 {
+      color: #fff; font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(34px, 6vw, 48px); line-height: 1.02; margin-bottom: 18px;
+    }
+    .eric-expired-card p {
+      max-width: 440px; margin: 0 auto; color: #c9cdea;
+      font-size: 16px; line-height: 1.65;
+    }
+    .eric-renew-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 54px; margin-top: 28px; padding: 14px 28px; border-radius: 999px;
+      color: #160f00; background: linear-gradient(135deg, #ffe27b, #f4b942);
+      box-shadow: 0 10px 34px rgba(244,185,66,.28); text-decoration: none;
+      font-size: 15px; font-weight: 800; transition: transform .2s, box-shadow .2s;
+    }
+    .eric-renew-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 40px rgba(244,185,66,.38); }
+    .eric-expired-logout {
+      display: block; margin: 18px auto 0; border: 0; background: transparent;
+      color: #8f98bd; font: 500 13px 'Outfit', sans-serif; cursor: pointer;
+    }
+    .eric-expired-logout:hover { color: #fff; }
 
     .app-body { display: flex; flex: 1; overflow: hidden; position: relative; z-index: 1; }
     aside { width: 240px; flex-shrink: 0; background: rgba(8,15,34,0.97); border-right: 1px solid rgba(123,92,255,0.1); display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
@@ -232,9 +285,20 @@
     }
   </style>
 </head>
-<body>
+<body class="eric-access-pending">
 
   <canvas id="starry-canvas"></canvas>
+
+  <section id="eric-expired-screen" class="eric-expired-screen" hidden aria-labelledby="eric-expired-title">
+    <div class="eric-expired-card">
+      <div class="eric-expired-emblem" aria-hidden="true">✦</div>
+      <div class="eric-expired-eyebrow">Éric Promoteur</div>
+      <h1 id="eric-expired-title">Tes 30 jours sont terminés</h1>
+      <p>Ton accompagnement avec Éric est arrivé à échéance. Tu peux reconduire ton accès pour continuer à créer des liens authentiques et avancer dans tes conversations.</p>
+      <a id="eric-renew-btn" class="eric-renew-btn" href="https://www.publication-web.com/nyxia/promoteurs">Reconduire mon accès</a>
+      <button type="button" class="eric-expired-logout" onclick="logout()">Me déconnecter</button>
+    </div>
+  </section>
 
   <header>
     <button type="button" id="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Ouvrir le menu">☰</button>
@@ -246,7 +310,7 @@
       </div>
     </div>
     <div class="header-center">
-      <div class="welcome-text">Bienvenue sur le Éric Promoteur ✦ <strong id="header-username"></strong></div>
+      <div class="welcome-text">Bienvenue dans Éric Promoteur ✦ <strong id="header-username"></strong></div>
     </div>
     <div class="header-actions">
       <span class="btn-header btn-pro">⭐ Éric Promoteur</span>
@@ -262,76 +326,49 @@
         <div class="sidebar-label">Mes Conversations</div>
         <div class="nav-item active" id="nav-diane" onclick="openAgentTab('diane')">
           <img class="nav-avatar" src="/Diane.png" alt="Diane">
-          <span class="nav-text"><span class="nav-name">Diane</span><span class="nav-sub">Prompt Formation</span></span>
+          <span class="nav-text"><span class="nav-name">Diane</span><span class="nav-sub">Cercles & entraide</span></span>
           <span class="nav-arrow">›</span>
         </div>
         <div class="nav-item" id="nav-nyxia" onclick="openAgentTab('nyxia')">
           <img class="nav-avatar" src="/NyXia.png" alt="NyXia">
-          <span class="nav-text"><span class="nav-name">NyXia</span><span class="nav-sub">Prompt Produit digitaux</span></span>
+          <span class="nav-text"><span class="nav-name">NyXia</span><span class="nav-sub">Orientation & technique digitaux</span></span>
           <span class="nav-arrow">›</span>
         </div>
         <div class="nav-item" id="nav-eric" onclick="openAgentTab('eric')">
           <img class="nav-avatar" src="/Eric.png" alt="Éric">
-          <span class="nav-text"><span class="nav-name">Éric</span><span class="nav-sub">Prompt Communication</span></span>
+          <span class="nav-text"><span class="nav-name">Éric</span><span class="nav-sub">Communication</span></span>
           <span class="nav-arrow">›</span>
         </div>
-        <!-- PERSONNAGES CONSERVÉS DANS LA STRUCTURE MAIS INACTIFS DANS CE PRODUIT
-        <div class="nav-item" id="nav-kael" onclick="openAgentTab('kael')">
-          <img class="nav-avatar" src="/Kael.png" alt="Kael">
-          <span class="nav-text"><span class="nav-name">Kael</span><span class="nav-sub">Prompt Relation amoureuse</span></span>
-          <span class="nav-arrow">›</span>
-        </div>
-        <div class="nav-item" id="nav-lena" onclick="openAgentTab('lena')">
-          <img class="nav-avatar" src="/Lena.png" alt="Léna">
-          <span class="nav-text"><span class="nav-name">Léna</span><span class="nav-sub">Prompt Spiritualité</span></span>
-          <span class="nav-arrow">›</span>
-        </div>
-        <div class="nav-item" id="nav-selena" onclick="openAgentTab('selena')">
-          <img class="nav-avatar" src="/Selena.png" alt="Séléna">
-          <span class="nav-text"><span class="nav-name">Séléna</span><span class="nav-sub">Prompt reconnexion à soi</span></span>
-          <span class="nav-arrow">›</span>
-        </div>
-        <div class="nav-item" id="nav-alex" onclick="openAgentTab('alex')">
-          <img class="nav-avatar" src="/Alex.png" alt="Alex">
-          <span class="nav-text"><span class="nav-name">Alex</span><span class="nav-sub">Prompt écriture</span></span>
-          <span class="nav-arrow">›</span>
-        </div>
-        -->
       </div>
       
       <div class="sidebar-divider"></div>
-      
-      <!-- SECTION : MESSAGERIE -->
+
       <div class="sidebar-section">
-        <div class="sidebar-label">Messagerie</div>
-        <!-- ÉLÉMENTS CONSERVÉS DANS LA STRUCTURE MAIS INACTIFS DANS CE PRODUIT
-        <a class="nav-item" id="nav-miroir" href="https://www.lemiroirnyxia.com/fr/login" target="_blank" rel="noopener">
-          <span class="nav-icon">🪞</span> Mon Espace <span class="nav-arrow">↗</span>
-        </a>
-        <a class="nav-item" id="nav-groupe" href="https://www.facebook.com/groups/nyxiastudioprompts" target="_blank" rel="noopener">
-          <span class="nav-icon">👥</span> Accès au groupe <span class="nav-arrow">↗</span>
-        </a>
-        -->
-        <div class="nav-item" id="nav-messages" onclick="showPanel('messages'); loadMessages()">
-          <span class="nav-icon">💌</span> Messages du Cercle <span class="nav-arrow">›</span> <span id="unread-badge" style="display:none;background:#ff4b6e;color:#fff;border-radius:50px;font-size:10px;font-weight:700;padding:2px 7px;margin-left:4px"></span>
+        <div class="sidebar-label">Mon Cercle</div>
+        <div class="nav-item" id="nav-home" onclick="openPromoPage('/promo-home.html')">
+          <span class="nav-icon">📊</span> Tableau de bord <span class="nav-arrow">›</span>
+        </div>
+        <div class="nav-item" id="nav-lien" onclick="openPromoPage('/promo-lien.html')">
+          <span class="nav-icon">🔗</span> Mon lien d'équipe <span class="nav-arrow">›</span>
+        </div>
+        <div class="nav-item" id="nav-phare" onclick="openPromoPage('/promo-phare.html')">
+          <span class="nav-icon">⭐</span> Produit phare <span class="nav-arrow">›</span>
+        </div>
+        <div class="nav-item" id="nav-rep" onclick="openPromoPage('/promo-repertoire.html')">
+          <span class="nav-icon">📦</span> Produits à partager <span class="nav-arrow">›</span>
         </div>
       </div>
 
-      <div class="sidebar-divider"></div>
-
-      <!-- SECTION : MÉDIAS -->
       <div class="sidebar-section">
-        <div class="sidebar-label">Médias</div>
-        <!-- OUTILS CONSERVÉS DANS LA STRUCTURE MAIS INACTIFS DANS CE PRODUIT
-        <div class="nav-item" id="nav-studio" onclick="showPanel('studio')">
-          <span class="nav-icon">⚡</span> Éric Promoteur <span class="nav-arrow">›</span>
+        <div class="sidebar-label">Outils</div>
+        <div class="nav-item" id="nav-messages" onclick="showPanel('messages'); if(typeof loadMessages==='function')loadMessages()">
+          <span class="nav-icon">💬</span> Messagerie <span class="nav-arrow">›</span>
         </div>
-        <div class="nav-item" id="nav-journal" onclick="showPanel('journal')">
-          <span class="nav-icon">📓</span> Mon Journal <span class="nav-arrow">›</span>
-        </div>
-        -->
         <div class="nav-item" id="nav-medias" onclick="showPanel('medias')">
           <span class="nav-icon">✨</span> Banque d'images - Sons et Vidéos <span class="nav-arrow">›</span>
+        </div>
+        <div class="nav-item" id="nav-studio" onclick="window.open('https://repertoire.nyxia.top/repertoire.html','_blank')">
+          <span class="nav-icon">📦</span> Répertoire <span class="nav-arrow">↗</span>
         </div>
       </div>
       
@@ -340,7 +377,7 @@
           <div class="user-avatar" id="sidebar-avatar">D</div>
           <div class="user-info">
             <div class="user-name" id="sidebar-username">Chargement...</div>
-            <div class="user-plan">✦ Éric Promoteur</div>
+            <div class="user-plan">✦ Cercle NyXia</div>
           </div>
         </div>
       </div>
@@ -349,7 +386,7 @@
     <div class="main-content">
       <!-- Panel Chat — charge la page individuelle du personnage en iframe -->
       <div class="panel active" id="panel-chat" style="flex-direction:column">
-        <iframe id="agent-iframe" src="/chat-diane.html" style="width:100%;height:100%;border:none;display:block" title="Conversation"></iframe>
+        <iframe id="agent-iframe" src="about:blank" style="width:100%;height:100%;border:none;display:block" title="Conversation"></iframe>
       </div>
 
       <!-- Panel Mon Espace — désactivé (ouvre en nouvel onglet) -->
@@ -359,10 +396,10 @@
         <a href="https://www.lemiroirnyxia.com/fr/login" target="_blank" rel="noopener" style="padding:10px 22px;border-radius:50px;background:linear-gradient(135deg,#7B5CFF,#5A6CFF);color:#fff;text-decoration:none;font-weight:600;font-size:13px">Ouvrir Mon Espace ↗</a>
       </div>
 
-      <!-- Panel Journal Éric Promoteur -->
+      <!-- Panel Journal -->
       <div class="panel" id="panel-journal" style="flex-direction:column">
         <div style="flex:1;overflow:hidden;position:relative">
-          <iframe src="/journal-studio.html" style="width:100%;height:100%;border:none;display:block" title="Mon Journal Éric Promoteur"></iframe>
+          <iframe src="/journal-studio.html" style="width:100%;height:100%;border:none;display:block" title="Journal"></iframe>
         </div>
       </div>
 
@@ -419,12 +456,12 @@
 
       <!-- Panel Livres Audio / Mini-formation TikTok -->
       <div class="panel" id="panel-audiobooks" style="flex-direction:column">
-        <div style="padding:40px;color:#8891b8;font-family:Outfit,sans-serif;text-align:center">Section retirée — utilise les personnages et le Éric Promoteur.</div>
+        <div style="padding:40px;color:#8891b8;font-family:Outfit,sans-serif;text-align:center">Section retirée — utilise les personnages et le Cercle.</div>
       </div>
 
-      <!-- Panel Éric Promoteur — multi-modèles (OpenRouter) -->
+      <!-- Panel Cercle — multi-modèles (OpenRouter) -->
       <div class="panel" id="panel-studio" style="flex-direction:column">
-        <iframe id="studio-iframe" src="/studio-prompt.html" style="width:100%;height:100%;border:none;display:block" title="Éric Promoteur"></iframe>
+        <iframe id="studio-iframe" src="about:blank" style="width:100%;height:100%;border:none;display:block" title="Éric Promoteur"></iframe>
       </div>
 
     </div>
@@ -465,6 +502,7 @@
     /* ═══════ AUTH ═══════ */
     var sessionToken = sessionStorage.getItem('nyxia_token') || ''
     var clientEmail  = '', clientName = ''
+    var ericAccessTimer = null
     ;(function checkAuth() {
       // Protection login — identique aux pages chat-*.html
       if (!sessionToken) { window.location.href = '/login.html'; return }
@@ -478,10 +516,49 @@
         if (!data.valid) { window.location.href = '/login.html'; return }
         clientEmail = data.email || ''
         clientName = localStorage.getItem('nyxia_username') || data.firstname || ''
+        if (data.eric_access === false) {
+          showEricExpiredScreen(data)
+          return
+        }
+        document.body.classList.remove('eric-access-pending', 'eric-access-expired')
         initUI()
+        startEricAccessMonitor()
       })
       .catch(function() { window.location.href = '/login.html' })
     })()
+
+    function showEricExpiredScreen(data) {
+      document.body.classList.remove('eric-access-pending')
+      document.body.classList.add('eric-access-expired')
+      var screen = document.getElementById('eric-expired-screen')
+      var renew = document.getElementById('eric-renew-btn')
+      if (renew && data && data.renew_url) renew.href = data.renew_url
+      if (screen) screen.hidden = false
+      var agentFrame = document.getElementById('agent-iframe')
+      var studioFrame = document.getElementById('studio-iframe')
+      if (agentFrame) agentFrame.src = 'about:blank'
+      if (studioFrame) studioFrame.src = 'about:blank'
+      if (ericAccessTimer) {
+        clearInterval(ericAccessTimer)
+        ericAccessTimer = null
+      }
+    }
+
+    function startEricAccessMonitor() {
+      if (ericAccessTimer) clearInterval(ericAccessTimer)
+      ericAccessTimer = setInterval(function() {
+        fetch('/api/eric/access', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: sessionToken })
+        })
+        .then(function(r) { return r.json() })
+        .then(function(data) {
+          if (data.expired || data.ok === false) showEricExpiredScreen(data)
+        })
+        .catch(function() { /* une panne réseau temporaire ne coupe pas l'écran */ })
+      }, 60000)
+    }
 
     function initUI() {
       document.getElementById('header-username').textContent = clientName
@@ -700,7 +777,7 @@
       var iframe = document.getElementById('studio-iframe')
       if (!iframe) return
       var tok = sessionToken || sessionStorage.getItem('nyxia_token') || ''
-      var base = '/studio-prompt.html?t=' + encodeURIComponent(tok)
+      var base = '/promo-home.html?t=' + encodeURIComponent(tok)
       // Recharge seulement si pas encore chargé (évite d'effacer l'état mémoire inutilement ;
       // sessionStorage restaure la conversation de toute façon)
       if (!iframe.getAttribute('data-loaded')) {
@@ -819,8 +896,8 @@
     function sendWelcome() {
       var name = clientName || 'Membre'
       var welcome = '✦ Allô ' + name + ' 💜\n\n' +
-        'Tu n\'es pas ici par hasard. Bienvenue dans ton espace CashFlow — ton sanctuaire de travail.\n\n' +
-        'Tu n\'as plus à crier dans le vide ni à déranger tes proches. Je t\'ouvre les portes de nos trois grands Cercles, 88 000 personnes réunies : Les Entrepreneurs du Québec, CashFlow™, et le [Cercle Magique « L\'âme-agit »](https://www.facebook.com/groups/cerclemagique). C\'est là que tu vas tisser des liens vrais.\n\n' +
+        'Tu n\'es pas ici par hasard. Bienvenue dans ton espace Cercle — ton sanctuaire de travail.\n\n' +
+        'Tu n\'as plus à crier dans le vide ni à déranger tes proches. Je t\'ouvre les portes de nos trois grands Cercles, 88 000 personnes réunies : Les Entrepreneurs du Québec, NyXia, et le [Cercle Magique « L\'âme-agit »](https://www.facebook.com/groups/cerclemagique). C\'est là que tu vas tisser des liens vrais.\n\n' +
         'Dis-moi — as-tu envie qu\'Éric te forme et te donne de quoi publier aujourd\'hui, ou veux-tu d\'abord entendre la vision de Diane ? ✦'
       addBotMessage(welcome)
       addAlphaChoiceButtons()
@@ -828,7 +905,7 @@
 
     var ALPHA_INFO = {
       diane: { name: 'Diane',  icon: '👑', sub: 'La créatrice — présente en clone IA', greeting: '💜 Ah, te voilà. Je suis **Diane** — enfin, ma présence sous forme de clone IA, pour être là avec toi pendant ta formation. Dis-moi ce qui t\'habite aujourd\'hui : l\'envie de comprendre le *pourquoi* derrière tout ça, ou simplement besoin d\'un peu d\'élan ? ✨' },
-      eric:   { name: 'Éric',   icon: '🔥', sub: 'Gardien-formateur du Portail CashFlow', greeting: '🔥 Eh bien, eh bien… regarde qui vient de franchir le portail !\n\nMoi, c\'est Éric, le Gardien et formateur du Portail CashFlow™.\n\nQue souhaites-tu faire maintenant ?\n\n📘 Commencer ta formation sur la communication à l\'ère numérique ;\n📜 Recevoir un parchemin prêt à publier ;\n💬 Me transmettre un commentaire ou un message privé que tu as reçu afin que je t\'aide à préparer une réponse parfaitement adaptée à cette personne.\n\nÉcris simplement :\n👉 « Donne-moi un parchemin »\nou\n👉 « Voici le message que j\'ai reçu : » puis colle le commentaire ou le message privé directement ici.\n\nJe prendrai ensuite le relais pour te guider dans la création d\'une réponse humaine, naturelle et ultra personnalisée. 👑😉' }
+      eric:   { name: 'Éric',   icon: '🔥', sub: 'Gardien-formateur du Cercle', greeting: '🔥 Eh bien, eh bien… regarde qui vient de franchir le portail !\n\nMoi, c\'est Éric, le Gardien et formateur du Cercle.\n\nQue souhaites-tu faire maintenant ?\n\n📘 Commencer ta formation sur la communication à l\'ère numérique ;\n📜 Recevoir un parchemin prêt à publier ;\n💬 Me transmettre un commentaire ou un message privé que tu as reçu afin que je t\'aide à préparer une réponse parfaitement adaptée à cette personne.\n\nÉcris simplement :\n👉 « Donne-moi un parchemin »\nou\n👉 « Voici le message que j\'ai reçu : » puis colle le commentaire ou le message privé directement ici.\n\nJe prendrai ensuite le relais pour te guider dans la création d\'une réponse humaine, naturelle et ultra personnalisée. 👑😉' }
     }
     var AGENT_IMAGES = {
       nyxia: '/NyXia.png',
@@ -1222,7 +1299,7 @@
     var AGENT_WELCOME_AUDIO = {
       nyxia: '/AccueilNyXiaClientes.mp3',
       diane: '/Bienvenue_Diane.mp3',   // 👉 Diane : pousse ce fichier (ou ajuste le nom)
-      eric:  '/Bienvenue_Eric_CashFlow.mp3'  // 👉 pousse ce fichier (ou ajuste le nom)
+      eric:  ''  // 👉 pousse ce fichier (ou ajuste le nom)
     }
 
     // Vidéos d'accueil (Alexya.ia) — jouées UNE fois à la première visite de chaque
@@ -1318,6 +1395,26 @@
         .trim()
     }
     function escHtml(str) { var d = document.createElement('div'); d.textContent = str; return d.innerHTML }
-  </script>
+  
+    function openPromoPage(url) {
+      document.querySelectorAll('.nav-item').forEach(function(n){ n.classList.remove('active'); });
+      document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+      var host = document.getElementById('panel-promo');
+      if (!host) {
+        host = document.createElement('div');
+        host.id = 'panel-promo';
+        host.className = 'panel';
+        host.style.cssText = 'flex-direction:column';
+        host.innerHTML = '<iframe id="promo-frame" style="width:100%;height:100%;border:none;display:block"></iframe>';
+        var main = document.querySelector('.main-content');
+        if (main) main.appendChild(host);
+      }
+      host.classList.add('active');
+      var f = document.getElementById('promo-frame');
+      if (f) f.src = url + (url.indexOf('?')>=0?'&':'?') + '_=' + Date.now();
+      if (typeof closeMobileMenu === 'function') closeMobileMenu();
+    }
+
+</script>
 </body>
 </html>
