@@ -87,6 +87,7 @@
     .eric-renew-btn {
       display: inline-flex; align-items: center; justify-content: center;
       min-height: 54px; margin-top: 28px; padding: 14px 28px; border-radius: 999px;
+      border: 0; font-family: 'Outfit', sans-serif; cursor: pointer;
       color: #160f00; background: linear-gradient(135deg, #ffe27b, #f4b942);
       box-shadow: 0 10px 34px rgba(244,185,66,.28); text-decoration: none;
       font-size: 15px; font-weight: 800; transition: transform .2s, box-shadow .2s;
@@ -97,6 +98,16 @@
       color: #8f98bd; font: 500 13px 'Outfit', sans-serif; cursor: pointer;
     }
     .eric-expired-logout:hover { color: #fff; }
+    .eric-pending-status {
+      min-height: 22px; margin-top: 14px; color: #9fa8ce;
+      font-size: 12px; line-height: 1.5;
+    }
+    .eric-admin-activate {
+      display: block; margin: 12px auto 0; padding: 10px 18px; border-radius: 999px;
+      border: 1px solid rgba(167,139,250,.38); background: rgba(123,92,255,.11);
+      color: #c4b5fd; font: 700 12px 'Outfit', sans-serif; cursor: pointer;
+    }
+    .eric-admin-activate:hover { background: rgba(123,92,255,.2); color: #fff; }
 
     .app-body { display: flex; flex: 1; overflow: hidden; position: relative; z-index: 1; }
     aside { width: 240px; flex-shrink: 0; background: rgba(8,15,34,0.97); border-right: 1px solid rgba(123,92,255,0.1); display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
@@ -288,6 +299,19 @@
 <body class="eric-access-pending">
 
   <canvas id="starry-canvas"></canvas>
+
+  <section id="eric-pending-screen" class="eric-expired-screen eric-pending-screen" hidden aria-labelledby="eric-pending-title">
+    <div class="eric-expired-card">
+      <div class="eric-expired-emblem" aria-hidden="true">✦</div>
+      <div class="eric-expired-eyebrow">Éric Promoteur</div>
+      <h1 id="eric-pending-title">Ton accès se prépare</h1>
+      <p>Nous n’avons pas encore reçu la confirmation de ton achat. Si tu viens de commander, cette page vérifiera automatiquement ton accès dans quelques instants.</p>
+      <div id="eric-pending-status" class="eric-pending-status">Vérification automatique en cours…</div>
+      <button type="button" class="eric-renew-btn" onclick="retryEricAccess()">Vérifier maintenant</button>
+      <button type="button" id="eric-admin-activate" class="eric-admin-activate" onclick="activateCurrentAccountFor30Days()" hidden>Activer 30 jours — administration</button>
+      <button type="button" class="eric-expired-logout" onclick="logout()">Me déconnecter</button>
+    </div>
+  </section>
 
   <section id="eric-expired-screen" class="eric-expired-screen" hidden aria-labelledby="eric-expired-title">
     <div class="eric-expired-card">
@@ -503,6 +527,8 @@
     var sessionToken = sessionStorage.getItem('nyxia_token') || ''
     var clientEmail  = '', clientName = ''
     var ericAccessTimer = null
+    var ericPendingTimer = null
+    var ericUiInitialized = false
     ;(function checkAuth() {
       // Protection login — identique aux pages chat-*.html
       if (!sessionToken) { window.location.href = '/login.html'; return }
@@ -516,23 +542,54 @@
         if (!data.valid) { window.location.href = '/login.html'; return }
         clientEmail = data.email || ''
         clientName = localStorage.getItem('nyxia_username') || data.firstname || ''
-        if (data.eric_access === false) {
+        if (data.expired === true) {
           showEricExpiredScreen(data)
           return
         }
-        document.body.classList.remove('eric-access-pending', 'eric-access-expired')
-        initUI()
-        startEricAccessMonitor()
+        if (data.eric_access === false) {
+          showEricPendingScreen(data)
+          return
+        }
+        activateEricInterface(data)
       })
       .catch(function() { window.location.href = '/login.html' })
     })()
 
+    function activateEricInterface(data) {
+      if (ericPendingTimer) { clearInterval(ericPendingTimer); ericPendingTimer = null }
+      var pendingScreen = document.getElementById('eric-pending-screen')
+      var expiredScreen = document.getElementById('eric-expired-screen')
+      if (pendingScreen) pendingScreen.hidden = true
+      if (expiredScreen) expiredScreen.hidden = true
+      document.body.classList.remove('eric-access-pending', 'eric-access-expired')
+      if (!ericUiInitialized) {
+        ericUiInitialized = true
+        initUI()
+      }
+      startEricAccessMonitor()
+    }
+
+    function showEricPendingScreen(data) {
+      document.body.classList.remove('eric-access-expired')
+      document.body.classList.add('eric-access-pending')
+      var pendingScreen = document.getElementById('eric-pending-screen')
+      var expiredScreen = document.getElementById('eric-expired-screen')
+      if (expiredScreen) expiredScreen.hidden = true
+      if (pendingScreen) pendingScreen.hidden = false
+      if (ericAccessTimer) { clearInterval(ericAccessTimer); ericAccessTimer = null }
+      showEricAdminActivationButton()
+      startEricPendingMonitor()
+    }
+
     function showEricExpiredScreen(data) {
+      if (ericPendingTimer) { clearInterval(ericPendingTimer); ericPendingTimer = null }
       document.body.classList.remove('eric-access-pending')
       document.body.classList.add('eric-access-expired')
       var screen = document.getElementById('eric-expired-screen')
+      var pendingScreen = document.getElementById('eric-pending-screen')
       var renew = document.getElementById('eric-renew-btn')
       if (renew && data && data.renew_url) renew.href = data.renew_url
+      if (pendingScreen) pendingScreen.hidden = true
       if (screen) screen.hidden = false
       var agentFrame = document.getElementById('agent-iframe')
       var studioFrame = document.getElementById('studio-iframe')
@@ -544,17 +601,95 @@
       }
     }
 
+    function checkEricAccessOnce() {
+      return fetch('/api/eric/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: sessionToken })
+      })
+      .then(function(r) { return r.json() })
+      .then(function(data) {
+        if (data.active === true || data.ok === true) {
+          activateEricInterface(data)
+          return data
+        }
+        if (data.expired === true) {
+          showEricExpiredScreen(data)
+          return data
+        }
+        var status = document.getElementById('eric-pending-status')
+        if (status) status.textContent = 'Confirmation toujours en attente — nouvelle vérification automatique…'
+        return data
+      })
+    }
+
+    function retryEricAccess() {
+      var status = document.getElementById('eric-pending-status')
+      if (status) status.textContent = 'Vérification en cours…'
+      checkEricAccessOnce().catch(function() {
+        if (status) status.textContent = 'Impossible de vérifier pour le moment. Une nouvelle tentative sera faite automatiquement.'
+      })
+    }
+
+    function startEricPendingMonitor() {
+      if (ericPendingTimer) return
+      ericPendingTimer = setInterval(function() {
+        checkEricAccessOnce().catch(function() { /* une panne temporaire ne change pas le statut */ })
+      }, 5000)
+    }
+
+    function getStoredAdminSession() {
+      try {
+        var raw = sessionStorage.getItem('nyxia_admin_session')
+        if (!raw) return null
+        var adminSession = JSON.parse(raw)
+        if (!adminSession.token || Date.now() - adminSession.created >= 4 * 60 * 60 * 1000) return null
+        return adminSession
+      } catch (e) { return null }
+    }
+
+    function showEricAdminActivationButton() {
+      var button = document.getElementById('eric-admin-activate')
+      if (button) button.hidden = !getStoredAdminSession()
+    }
+
+    function activateCurrentAccountFor30Days() {
+      var adminSession = getStoredAdminSession()
+      var status = document.getElementById('eric-pending-status')
+      if (!adminSession) {
+        if (status) status.textContent = 'Reconnecte-toi d’abord au Superadmin dans ce même onglet.'
+        return
+      }
+      if (!clientEmail) {
+        if (status) status.textContent = 'Le courriel du compte est introuvable.'
+        return
+      }
+      if (status) status.textContent = 'Activation administrative en cours…'
+      fetch('/api/admin/eric/grant', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Token': adminSession.token
+        },
+        body: JSON.stringify({ email: clientEmail })
+      })
+      .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data } }) })
+      .then(function(result) {
+        if (!result.ok || !result.data.success) throw new Error(result.data.error || 'Activation refusée')
+        if (status) status.textContent = 'Accès activé. Ouverture du portail…'
+        return checkEricAccessOnce()
+      })
+      .catch(function(error) {
+        if (status) status.textContent = error.message || 'Impossible d’activer ce compte.'
+      })
+    }
+
     function startEricAccessMonitor() {
       if (ericAccessTimer) clearInterval(ericAccessTimer)
       ericAccessTimer = setInterval(function() {
-        fetch('/api/eric/access', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: sessionToken })
-        })
-        .then(function(r) { return r.json() })
+        checkEricAccessOnce()
         .then(function(data) {
-          if (data.expired || data.ok === false) showEricExpiredScreen(data)
+          if (data && data.pending === true) showEricPendingScreen(data)
         })
         .catch(function() { /* une panne réseau temporaire ne coupe pas l'écran */ })
       }, 60000)
