@@ -1473,12 +1473,12 @@ async function handleHelpdesk(request, env) {
   try {
     let resp = await callModel(OPENROUTER_MODEL);
     if (!resp.ok) resp = await callModel(OPENROUTER_FALLBACK_MODEL);
-    if (!resp.ok) return json({ content: 'Petite interruption dans le miroir… réessaie dans un instant 💜' });
+    if (!resp.ok) return json({ content: 'Petite interruption... réessaies dans un instant 💜' });
     const data = await resp.json();
     const content = data.choices?.[0]?.message?.content || 'Je t\'écoute 💜';
     return json({ content });
   } catch (e) {
-    return json({ content: 'Petite interruption dans le miroir… réessaie dans un instant 💜' });
+    return json({ content: 'Petite interruption... réessaies dans un instant 💜' });
   }
 }
 
@@ -2088,8 +2088,8 @@ async function handleChat(request, env) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${env.OPENROUTER_API_KEY || env.AI_API_KEY}`,
-        'HTTP-Referer': 'https://cercles.nyxia.top',
-        'X-Title': 'NyXia — Le Cercle'
+        'HTTP-Referer': 'https://eric-promoteurs.nyxia.top',
+        'X-Title': 'NyXia — Éric Promoteurs'
       },
       body: JSON.stringify({
         model,
@@ -2109,7 +2109,7 @@ async function handleChat(request, env) {
   }
 
   if (!resp.ok) {
-    return json({ content: 'Petite interruption dans le miroir... réessaie dans un instant 💜' });
+    return json({ content: 'Petite interruption... réessaies dans un instant 💜' });
   }
 
   let data = await resp.json();
@@ -2132,8 +2132,8 @@ async function handleChat(request, env) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${env.OPENROUTER_API_KEY || env.AI_API_KEY}`,
-        'HTTP-Referer': 'https://cercles.nyxia.top',
-        'X-Title': 'NyXia — Le Cercle'
+        'HTTP-Referer': 'https://eric-promoteurs.nyxia.top',
+        'X-Title': 'NyXia — Éric Promoteurs'
       },
       body: JSON.stringify({
         model: usedModel,
@@ -2151,7 +2151,7 @@ async function handleChat(request, env) {
     continueMessages.push({ role: 'assistant', content: piece });
   }
 
-  if (!content) content = 'Le miroir est resté silencieux, réessaie 💜';
+  if (!content) content = 'Petite interruption... réessaies dans un instant 💜';
   return json({ content });
 }
 
