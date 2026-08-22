@@ -235,15 +235,24 @@ async function grantEricAccess(env, userId, email, source = 'systeme') {
   });
   const options = { expirationTtl: ERIC_PRODUCT_TTL };
   const keys = new Set();
+  const historyKeys = new Set();
 
-  if (userId) keys.add('eric_access:' + userId);
+  if (userId) {
+    keys.add('eric_access:' + userId);
+    historyKeys.add('eric_access_history:' + userId);
+  }
   if (normalizedEmail) {
     keys.add('eric_access:email:' + normalizedEmail);
     // Compatibilité avec l'ancienne activation qui utilisait directement le courriel.
     keys.add('eric_access:' + normalizedEmail);
+    historyKeys.add('eric_access_history:email:' + normalizedEmail);
   }
 
-  await Promise.all([...keys].map(key => env.CASHFLOW_KV.put(key, payload, options)));
+  await Promise.all([
+    ...[...keys].map(key => env.CASHFLOW_KV.put(key, payload, options)),
+    // Cette trace sans TTL permet de distinguer un accès jamais activé d'un accès réellement expiré.
+    ...[...historyKeys].map(key => env.CASHFLOW_KV.put(key, payload))
+  ]);
   return { granted_at: grantedAt.toISOString(), expires_at: expiresAt.toISOString() };
 }
 
@@ -259,10 +268,15 @@ async function getEricAccessStatus(env, session) {
   const userId = session.userId || session.id || null;
   const email = normalizeEmail(session.email);
   const keys = new Set();
-  if (userId) keys.add('eric_access:' + userId);
+  const historyKeys = new Set();
+  if (userId) {
+    keys.add('eric_access:' + userId);
+    historyKeys.add('eric_access_history:' + userId);
+  }
   if (email) {
     keys.add('eric_access:email:' + email);
     keys.add('eric_access:' + email);
+    historyKeys.add('eric_access_history:email:' + email);
   }
 
   const now = Date.now();
@@ -280,7 +294,65 @@ async function getEricAccessStatus(env, session) {
     records.push({ key, value, expiresAtMs });
   }
 
-  if (!records.length) return { active: false, expired: true, renew_url: renewUrl };
+  if (!records.length) {
+    const historyRecords = [];
+    for (const key of historyKeys) {
+      const raw = await env.CASHFLOW_KV.get(key);
+      if (!raw) continue;
+      try {
+        const value = JSON.parse(raw);
+        const expiresAtMs = value.expires_at ? Date.parse(value.expires_at) : null;
+        if (expiresAtMs) historyRecords.push({ key, value, expiresAtMs });
+      } catch (_) {}
+    }
+
+    if (!historyRecords.length) {
+      return {
+        active: false,
+        expired: false,
+        pending: true,
+        not_activated: true,
+        reason: 'awaiting_purchase_confirmation',
+        renew_url: renewUrl
+      };
+    }
+
+    historyRecords.sort((a, b) => b.expiresAtMs - a.expiresAtMs);
+    const history = historyRecords[0];
+    if (history.expiresAtMs <= now) {
+      return {
+        active: false,
+        expired: true,
+        pending: false,
+        ever_activated: true,
+        renew_url: renewUrl,
+        granted_at: history.value.granted_at || null,
+        expires_at: history.value.expires_at || null,
+        remaining_seconds: 0,
+        remaining_days: 0
+      };
+    }
+
+    // Auto-réparation si une clé active a disparu avant la date conservée dans l'historique.
+    const remainingSeconds = Math.max(60, Math.ceil((history.expiresAtMs - now) / 1000));
+    const restoredPayload = JSON.stringify(history.value);
+    await Promise.all([...keys].map(key => env.CASHFLOW_KV.put(
+      key,
+      restoredPayload,
+      { expirationTtl: remainingSeconds }
+    )));
+    return {
+      active: true,
+      expired: false,
+      pending: false,
+      restored: true,
+      renew_url: renewUrl,
+      granted_at: history.value.granted_at || null,
+      expires_at: history.value.expires_at || null,
+      remaining_seconds: remainingSeconds,
+      remaining_days: Math.ceil(remainingSeconds / 86400)
+    };
+  }
 
   records.sort((a, b) => (b.expiresAtMs || 0) - (a.expiresAtMs || 0));
   const record = records[0];
@@ -288,9 +360,16 @@ async function getEricAccessStatus(env, session) {
     ? Math.max(0, Math.ceil((record.expiresAtMs - now) / 1000))
     : null;
 
+  // Migration transparente des accès créés avant l'ajout de la trace persistante.
+  await Promise.all([...historyKeys].map(async key => {
+    const existing = await env.CASHFLOW_KV.get(key);
+    if (!existing) await env.CASHFLOW_KV.put(key, JSON.stringify(record.value));
+  }));
+
   return {
     active: true,
     expired: false,
+    pending: false,
     renew_url: renewUrl,
     granted_at: record.value.granted_at || null,
     expires_at: record.value.expires_at || null,
@@ -299,7 +378,16 @@ async function getEricAccessStatus(env, session) {
   };
 }
 
-function ericExpiredResponse(env) {
+function ericAccessDeniedResponse(env, access = {}) {
+  if (access.pending || access.not_activated) {
+    return json({
+      error: 'eric_access_pending',
+      pending: true,
+      expired: false,
+      renew_url: getEricRenewUrl(env),
+      content: 'La confirmation de ton achat avec Éric n’est pas encore arrivée. Réessaie dans quelques instants.'
+    }, 403);
+  }
   return json({
     error: 'eric_access_expired',
     expired: true,
@@ -586,19 +674,38 @@ async function handleSystemeWebhook(request, env) {
   if (providedSecret !== secret) return json({ error: 'Secret invalide.' }, 401);
 
   const body = await request.json().catch(() => ({}));
+  const systemeData = body.data || {};
+  const systemeCustomer = systemeData.customer || {};
+  const systemeContact = systemeData.contact || {};
+  const customerFields = systemeCustomer.fields || {};
+  const contactFields = systemeContact.fields || {};
   // Systeme.io envoie souvent : email, first_name / full_name, tags, product, price, contact...
   const email = String(
-    body.email || (body.contact && body.contact.email) || body.customer_email || ''
+    body.email
+    || (body.contact && body.contact.email)
+    || body.customer_email
+    || systemeCustomer.email
+    || systemeContact.email
+    || ''
   ).trim().toLowerCase();
   const fullName = String(
     body.full_name || body.fullName || body.first_name ||
-    (body.contact && (body.contact.name || body.contact.first_name)) || 'Membre'
+    (body.contact && (body.contact.name || body.contact.first_name)) ||
+    [customerFields.first_name, customerFields.surname].filter(Boolean).join(' ') ||
+    [contactFields.first_name, contactFields.surname].filter(Boolean).join(' ') ||
+    'Membre'
   ).trim();
   const referralCode = String(
     body.ref || body.referral_code || body.affiliate_code || body.parrain || ''
   ).trim().toUpperCase();
   const product = String(
-    body.product || body.product_name || body.offer || body.tag || ''
+    body.product
+    || body.product_name
+    || body.offer
+    || body.tag
+    || (systemeData.offer_price_plan && (systemeData.offer_price_plan.name || systemeData.offer_price_plan.inner_name))
+    || (systemeData.funnel_step && systemeData.funnel_step.name)
+    || ''
   ).toLowerCase();
   const event = String(body.event || body.type || body.action || 'purchase').toLowerCase();
 
@@ -716,6 +823,7 @@ const url = new URL(request.url);
       if (path === '/api/admin/setup-vectorize' && request.method === 'POST') return await handleSetupVectorize(request, env);
 
       if (path === '/api/admin/login' && request.method === 'POST') return await handleAdminLogin(request, env);
+      if (path === '/api/admin/eric/grant' && request.method === 'POST') return await handleAdminGrantEricAccess(request, env);
       if (path === '/api/admin/clients' && request.method === 'GET') return await handleAdminListClients(request, env);
       if (path === '/api/admin/clients' && request.method === 'POST') return await handleAdminCreateClient(request, env);
       if (path === '/api/admin/clients/update' && request.method === 'POST') return await handleAdminUpdateClient(request, env);
@@ -927,7 +1035,10 @@ async function handleCheckAuth(request, env) {
     code: session.code || '',
     paypal: session.paypal || '',
     eric_access: access.active,
-    expired: !access.active,
+    expired: access.expired === true,
+    pending: access.pending === true,
+    not_activated: access.not_activated === true,
+    access_reason: access.reason || null,
     renew_url: access.renew_url,
     granted_at: access.granted_at || null,
     expires_at: access.expires_at || null,
@@ -955,7 +1066,7 @@ async function handleChat(request, env) {
   let session;
   try { session = JSON.parse(sessionRaw); } catch (_) { return json({ error: 'Session invalide.' }, 401); }
   const access = await getEricAccessStatus(env, session);
-  if (!access.active) return ericExpiredResponse(env);
+  if (!access.active) return ericAccessDeniedResponse(env, access);
   if (!ACTIVE_AGENTS.has(agent)) {
     return json({ error: 'Personnage non disponible dans Éric Promoteurs.' }, 403);
   }
@@ -1177,7 +1288,7 @@ async function handleStudioChat(request, env) {
   let session;
   try { session = JSON.parse(sessionRaw); } catch (_) { return json({ error: 'Session invalide.', content: 'Session invalide.' }, 401); }
   const access = await getEricAccessStatus(env, session);
-  if (!access.active) return ericExpiredResponse(env);
+  if (!access.active) return ericAccessDeniedResponse(env, access);
 
   if (!message || !String(message).trim()) {
     return json({ error: 'Message vide.', content: 'Message vide.' }, 400);
@@ -1284,6 +1395,29 @@ async function handleAdminLogin(request, env) {
   const token = randomToken();
   await env.CASHFLOW_KV.put(`admin_session:${token}`, '1', { expirationTtl: ADMIN_SESSION_TTL });
   return json({ success: true, token });
+}
+
+async function handleAdminGrantEricAccess(request, env) {
+  if (!await requireAdmin(request, env)) return json({ error: 'Non autorisé.' }, 401);
+
+  const body = await request.json().catch(() => ({}));
+  const email = normalizeEmail(body.email);
+  if (!email || !email.includes('@')) return json({ error: 'Courriel valide requis.' }, 400);
+
+  let userId = null;
+  if (env.DB) {
+    await ensureSchema(env);
+    const user = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+    userId = user ? user.id : null;
+  }
+
+  const access = await grantEricAccess(env, userId, email, 'superadmin');
+  return json({
+    success: true,
+    granted: 'eric_30',
+    email,
+    expires_at: access.expires_at
+  });
 }
 
 async function handleAdminListClients(request, env) {
