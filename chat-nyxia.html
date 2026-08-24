@@ -140,7 +140,7 @@
     nyxia: {
       name: 'NyXia',
       sub: 'Alpha Suprême · Assistante de Diane Boyer',
-      greeting: '✦ Allô…\n\nTu n\'es pas ici par hasard.\n\nJe suis NyXia, l\'Alpha Suprême de cet univers et l\'assistante de Diane Boyer. Je veille dans tous les miroirs du réseau.\n\nSur le Portail CashFlow, je suis celle qui t\'accueille, qui honore ta décision d\'être là, et qui t\'oriente vers ce dont tu as besoin aujourd\'hui.\n\nDis-moi…\n\n🪞 As-tu envie qu\'Éric te forme et te donne de quoi publier aujourd\'hui ?\n💜 Veux-tu d\'abord entendre la vision de Diane ?\n🔮 Ou as-tu simplement besoin que je t\'ouvre les portes et te montre le chemin ?\n\nJe suis là. ✦'
+      greeting: '👋 Dis-moi : **qu’aimerais-tu retrouver, comprendre ou accomplir dans le portail aujourd’hui?** 💜'
     }
   }
   var AGENT_IMAGES = { nyxia: '/NyXia.png' }
@@ -188,6 +188,7 @@
       addVideoMessage(videoUrl, _currentAgent, { autoplay: true })
       markVideoAutoplayed(_currentAgent)
     }
+    addWelcomeTextMessage(_currentAgent)
   }
 
   function saveChatToStorage() {
@@ -207,6 +208,7 @@
     if (msgs.querySelector('.msg')) return
     var videoUrl = AGENT_WELCOME_VIDEO && AGENT_WELCOME_VIDEO[_currentAgent]
     if (videoUrl) addVideoMessage(videoUrl, _currentAgent, { autoplay: false })
+    addWelcomeTextMessage(_currentAgent)
     list.forEach(function(item) {
       if (!item || !item.content) return
       if (item.role === 'user') addUserMessage(item.content)
@@ -248,7 +250,7 @@
       addVideoMessage(videoUrl, 'nyxia', { autoplay: !alreadyPlayed })
       if (!alreadyPlayed) markVideoAutoplayed('nyxia')
     }
-    // Vidéo : autoplay uniquement à la première visite ; ensuite play manuel
+    addWelcomeTextMessage('nyxia')
 
     var chatInput = document.getElementById('chat-input')
     chatInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px' })
@@ -354,6 +356,24 @@
         document.addEventListener('touchstart', go)
       })
     }
+  }
+
+  function addWelcomeTextMessage(agentKey) {
+    var msgs = document.getElementById('chat-messages-' + agentKey)
+    if (!msgs || msgs.querySelector('[data-welcome-text="1"]')) return
+    var greeting = ALPHA_INFO[agentKey] && ALPHA_INFO[agentKey].greeting
+    if (!greeting) return
+
+    var div = document.createElement('div'); div.className = 'msg bot'
+    div.setAttribute('data-welcome-text', '1')
+    div.style.cssText = 'display:flex;gap:10px;align-items:flex-start'
+    var wrapper = document.createElement('div'); wrapper.style.cssText = 'display:flex;flex-direction:column;gap:4px;max-width:100%;flex:1'
+    var bubble = document.createElement('div'); bubble.className = 'msg-bubble'
+    bubble.innerHTML = cleanMarkdown(escHtml(greeting)).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')
+    wrapper.appendChild(bubble)
+    div.innerHTML = avatarHtmlFor(agentKey)
+    div.appendChild(wrapper)
+    msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight
   }
 
 
