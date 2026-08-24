@@ -140,7 +140,7 @@
     diane: {
       name: 'Diane',
       sub: 'Créatrice de l\'univers NyXia',
-      greeting: '💜 Allô…\n\nJe suis Diane Boyer, présente ici sous la forme de ma clone IA.\n\nTu n\'es pas arrivé ici par hasard. Je suis la créatrice de cet univers, autrice de plus de 40 livres et de la méthode que tu explores en ce moment.\n\nJe suis là pour te reconnecter au « pourquoi », à la vision, à l\'esprit derrière la méthode — et pour te redonner de l\'élan quand tu en as besoin.\n\nDis-moi ce qui t\'habite en ce moment…\n\n✨ Tu veux comprendre le sens d\'une approche ?\n✨ Tu traverses un doute ou une croyance limitante ?\n✨ Tu as simplement besoin d\'entendre la voix de celle qui a fait le chemin avant toi ?\n\nJe t\'écoute. 🕯️'
+      greeting: '👋 Dis-moi : **quelle est la première chose que tu aimerais rendre plus simple aujourd’hui?** 🙂'
     }
   }
   var AGENT_IMAGES = { diane: '/Diane.png' }
@@ -198,6 +198,7 @@
       addVideoMessage(videoUrl, _currentAgent, { autoplay: true })
       markVideoAutoplayed(_currentAgent)
     }
+    addWelcomeTextMessage(_currentAgent)
   }
 
   function saveChatToStorage() {
@@ -217,6 +218,7 @@
     if (msgs.querySelector('.msg')) return
     var videoUrl = AGENT_WELCOME_VIDEO && AGENT_WELCOME_VIDEO[_currentAgent]
     if (videoUrl) addVideoMessage(videoUrl, _currentAgent, { autoplay: false })
+    addWelcomeTextMessage(_currentAgent)
     list.forEach(function(item) {
       if (!item || !item.content) return
       if (item.role === 'user') addUserMessage(item.content)
@@ -258,7 +260,7 @@
       addVideoMessage(videoUrl, 'diane', { autoplay: !alreadyPlayed })
       if (!alreadyPlayed) markVideoAutoplayed('diane')
     }
-    // Pas de message texte d'accueil auto — la vidéo de présentation suffit
+    addWelcomeTextMessage('diane')
 
     var chatInput = document.getElementById('chat-input')
     chatInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 120) + 'px' })
@@ -364,6 +366,24 @@
         document.addEventListener('touchstart', go)
       })
     }
+  }
+
+  function addWelcomeTextMessage(agentKey) {
+    var msgs = document.getElementById('chat-messages-' + agentKey)
+    if (!msgs || msgs.querySelector('[data-welcome-text="1"]')) return
+    var greeting = ALPHA_INFO[agentKey] && ALPHA_INFO[agentKey].greeting
+    if (!greeting) return
+
+    var div = document.createElement('div'); div.className = 'msg bot'
+    div.setAttribute('data-welcome-text', '1')
+    div.style.cssText = 'display:flex;gap:10px;align-items:flex-start'
+    var wrapper = document.createElement('div'); wrapper.style.cssText = 'display:flex;flex-direction:column;gap:4px;max-width:100%;flex:1'
+    var bubble = document.createElement('div'); bubble.className = 'msg-bubble'
+    bubble.innerHTML = cleanMarkdown(escHtml(greeting)).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')
+    wrapper.appendChild(bubble)
+    div.innerHTML = avatarHtmlFor(agentKey)
+    div.appendChild(wrapper)
+    msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight
   }
 
 
