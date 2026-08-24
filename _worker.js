@@ -1021,6 +1021,28 @@ const ERIC_RENEW_URL_DEFAULT = 'https://www.publication-web.com/nyxia/30jrseric'
 const SELENA_MIRROR_EXERCISES_KV_KEY = 'selena:exercices_miroirs';
 const ACTIVE_AGENTS = new Set(['diane', 'nyxia', 'eric']);
 
+// Protocole partagé par tous les personnages. Une vidéo n'est jamais choisie au hasard :
+// elle doit provenir d'un passage « Formation vivante vidéo » retrouvé dans Vectorize.
+const LIVING_VIDEO_TRAINING_PROTOCOL = `
+
+🎬 FORMATION VIVANTE VIDÉO — PROTOCOLE UNIVERSEL
+
+Le contexte retrouvé contient une leçon vidéo approuvée par Diane. Tu peux l'intégrer à ta réponse UNIQUEMENT si elle répond directement à la demande actuelle ou constitue la prochaine petite étape logique de l'accompagnement.
+
+RÈGLES ABSOLUES :
+- Utilise seulement une adresse indiquée exactement après « ADRESSE VIDÉO APPROUVÉE » dans le contexte retrouvé.
+- N'invente, ne corrige, ne raccourcis et ne remplace jamais cette adresse.
+- Une seule vidéo au maximum par réponse.
+- Introduis-la naturellement en une ou deux phrases courtes, dans la voix de ton personnage.
+- Pour afficher la vidéo dans le portail, place ce marqueur exact sur sa propre ligne :
+
+[VIDEO: adresse_https_approuvée]
+
+- Le marqueur doit rester intact. Ne le mets pas dans un bloc de code et ne l'explique jamais au Membre.
+- Après la vidéo, utilise la question d'intégration de la leçon si elle est pertinente, une seule question à la fois.
+- Si la vidéo n'est pas réellement utile maintenant, continue l'accompagnement sans l'afficher.
+- Si aucune adresse approuvée n'est présente, n'affiche aucune vidéo.`;
+
 // Pouvoir partagé par TOUS les personnages (NyXia, Diane, Éric) —
 // pour que la Gardienne n'ait jamais besoin de retourner voir NyXia juste pour une image.
 const IMAGE_GENERATION_INSTRUCTIONS = `
@@ -1092,6 +1114,48 @@ Quand tu livres un **texte prêt à coller** (publication, réponse à un commen
 - N'utilise ce marqueur QUE pour un texte destiné à être collé ailleurs — pas pour une simple explication.
 
 Si tu proposes plusieurs variantes, mets chaque texte dans son propre bloc [PROMPT]...[/PROMPT].`;
+
+function normalizeApprovedVideoUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || '').trim());
+    return parsed.protocol === 'https:' ? parsed.href : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function extractApprovedLivingVideoUrls(brainContext) {
+  const urls = [];
+  const seen = new Set();
+  const source = String(brainContext || '');
+  const approvedUrlRegex = /ADRESSE\s+VID(?:É|E)O\s+APPROUV(?:É|E)E\s*:\s*(https:\/\/[^\s<>"'\[\]]+)/giu;
+  let match;
+
+  while ((match = approvedUrlRegex.exec(source)) !== null) {
+    const normalized = normalizeApprovedVideoUrl(match[1]);
+    if (normalized && !seen.has(normalized)) {
+      seen.add(normalized);
+      urls.push(normalized);
+    }
+  }
+
+  return urls;
+}
+
+function sanitizeLivingVideoMarkers(content, approvedUrls) {
+  const allowed = new Set((approvedUrls || []).map(normalizeApprovedVideoUrl).filter(Boolean));
+  let videoAlreadyUsed = false;
+
+  return String(content || '')
+    .replace(/\[VIDEO\s*:\s*([^\]\r\n]+)\]/giu, (_marker, rawUrl) => {
+      const normalized = normalizeApprovedVideoUrl(rawUrl);
+      if (!normalized || !allowed.has(normalized) || videoAlreadyUsed) return '';
+      videoAlreadyUsed = true;
+      return `[VIDEO: ${normalized}]`;
+    })
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 // ───────────── UTILITAIRES ─────────────
 
@@ -2017,6 +2081,7 @@ async function handleChat(request, env) {
   }
 
   // 📚 CERVEAU VECTORIEL — chaque personnage fouille uniquement dans son propre espace Vectorize.
+  let approvedLivingVideoUrls = [];
   if (agent) { // universel : tout personnage cherche dans son namespace ; s'il est vide, rien n'est ajouté
     try {
       const brainCtx = await retrieveBrain(env, agent, message || '');
@@ -2035,6 +2100,11 @@ async function handleChat(request, env) {
           systemPrompt += `\n\n✍️ FORMATIONS D'ÉCRITURE ET MÉTHODES DE DIANE (matière de référence — utilise-les fidèlement pour enseigner, structurer et créer une œuvre originale. La morphopsychologie sert uniquement à bâtir des personnages fictifs et ne permet jamais de juger une personne réelle) :\n\n${brainCtx}`;
         } else {
           systemPrompt += `\n\n📚 EXTRAITS DE TES DOCUMENTS DE RÉFÉRENCE (matière première — appuie-toi dessus fidèlement, reformule dans ton ton, ne cite jamais de numéros de passage) :\n\n${brainCtx}`;
+        }
+
+        approvedLivingVideoUrls = extractApprovedLivingVideoUrls(brainCtx);
+        if (approvedLivingVideoUrls.length) {
+          systemPrompt += LIVING_VIDEO_TRAINING_PROTOCOL;
         }
       }
     } catch (e) { /* le chat continue même si le cerveau est indisponible */ }
@@ -2151,6 +2221,7 @@ async function handleChat(request, env) {
     continueMessages.push({ role: 'assistant', content: piece });
   }
 
+  content = sanitizeLivingVideoMarkers(content, approvedLivingVideoUrls);
   if (!content) content = 'Petite interruption... réessaies dans un instant 💜';
   return json({ content });
 }
