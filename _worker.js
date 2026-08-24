@@ -1017,7 +1017,7 @@ const OPENROUTER_FALLBACK_MODEL = 'mistralai/mistral-small-3.2-24b-instruct';
 const SESSION_TTL = 60 * 60 * 24 * 7;   // 7 jours
 const ADMIN_SESSION_TTL = 60 * 60 * 12; // 12 heures
 const ERIC_PRODUCT_TTL = 60 * 60 * 24 * 30; // 30 jours exacts
-const ERIC_RENEW_URL_DEFAULT = 'https://www.publication-web.com/nyxia/promoteurs';
+const ERIC_RENEW_URL_DEFAULT = 'https://www.publication-web.com/nyxia/30jrseric';
 const SELENA_MIRROR_EXERCISES_KV_KEY = 'selena:exercices_miroirs';
 const ACTIVE_AGENTS = new Set(['diane', 'nyxia', 'eric']);
 
