@@ -464,6 +464,82 @@
   }
 
   /* ═══════ MESSAGES & IMAGES ═══════ */
+  function safeLivingVideoUrl(rawUrl) {
+    try {
+      var parsed = new URL(String(rawUrl || '').trim(), window.location.href)
+      return parsed.protocol === 'https:' ? parsed.href : ''
+    } catch (e) { return '' }
+  }
+
+  function livingVideoEmbedUrl(rawUrl) {
+    try {
+      var parsed = new URL(rawUrl)
+      var host = parsed.hostname.toLowerCase().replace(/^www\./, '')
+      var videoId = ''
+
+      if (host === 'youtu.be') videoId = parsed.pathname.split('/').filter(Boolean)[0] || ''
+      if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+        videoId = parsed.searchParams.get('v') || ''
+        if (!videoId) {
+          var youtubeParts = parsed.pathname.split('/').filter(Boolean)
+          if (youtubeParts[0] === 'embed' || youtubeParts[0] === 'shorts') videoId = youtubeParts[1] || ''
+        }
+      }
+      if (/^[A-Za-z0-9_-]{6,}$/.test(videoId)) {
+        return 'https://www.youtube-nocookie.com/embed/' + videoId
+      }
+
+      if (host === 'vimeo.com' || host === 'player.vimeo.com') {
+        var vimeoMatch = parsed.pathname.match(/(?:video\/)?(\d+)/)
+        if (vimeoMatch) return 'https://player.vimeo.com/video/' + vimeoMatch[1]
+      }
+
+      if (host === 'iframe.videodelivery.net') return parsed.href
+      if (host === 'watch.cloudflarestream.com') {
+        var streamId = parsed.pathname.split('/').filter(Boolean)[0] || ''
+        if (/^[A-Za-z0-9_-]+$/.test(streamId)) return 'https://iframe.videodelivery.net/' + streamId
+      }
+    } catch (e) {}
+    return ''
+  }
+
+  function appendLivingVideo(wrapper, videoUrl) {
+    var card = document.createElement('div')
+    card.style.cssText = 'width:min(100%,560px);margin-top:6px;padding:10px;border-radius:16px;border:1px solid rgba(123,92,255,0.22);background:linear-gradient(145deg,rgba(123,92,255,0.09),rgba(255,255,255,0.025));box-shadow:0 12px 30px rgba(20,12,48,0.16)'
+
+    var label = document.createElement('div')
+    label.textContent = '🎬 Formation vivante'
+    label.style.cssText = 'font-size:12px;font-weight:700;color:#c4b5fd;letter-spacing:.02em;margin:1px 2px 9px'
+    card.appendChild(label)
+
+    var frame = document.createElement('div')
+    frame.style.cssText = 'position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:11px;background:#070713'
+    var embedUrl = livingVideoEmbedUrl(videoUrl)
+
+    if (embedUrl) {
+      var iframe = document.createElement('iframe')
+      iframe.src = embedUrl
+      iframe.title = 'Vidéo de formation'
+      iframe.loading = 'lazy'
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+      iframe.allowFullscreen = true
+      iframe.referrerPolicy = 'strict-origin-when-cross-origin'
+      iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0'
+      frame.appendChild(iframe)
+    } else {
+      var video = document.createElement('video')
+      video.src = videoUrl
+      video.controls = true
+      video.playsInline = true
+      video.preload = 'metadata'
+      video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#070713'
+      frame.appendChild(video)
+    }
+
+    card.appendChild(frame)
+    wrapper.appendChild(card)
+  }
+
   function addBotMessage(text) {
     var msgAgent = _currentAgent
     var msgs = document.getElementById('chat-messages-' + msgAgent)
@@ -477,18 +553,25 @@
     var parchMatch = text.match(parchRegex)
     var parchImgRegex = /\[(?:PROMPT|PARCHEMIN)_IMAGE\s*:\s*([\s\S]*?)\]/i
     var parchImgMatch = text.match(parchImgRegex)
-    var textWithoutImg = text.replace(imgRegex, '').replace(parchRegex, '').replace(parchImgRegex, '').trim()
+    var videoRegex = /\[VIDEO\s*:\s*([^\]\r\n]+)\]/i
+    var videoMatch = text.match(videoRegex)
+    var textWithoutImg = text.replace(imgRegex, '').replace(parchRegex, '').replace(parchImgRegex, '').replace(videoRegex, '').trim()
     var imgDesc = imgMatch ? imgMatch[1].trim() : null
     var parchContent = parchMatch ? parchMatch[1].trim() : null
     var parchImgUrl = parchImgMatch ? parchImgMatch[1].trim() : null
+    var videoUrl = videoMatch ? safeLivingVideoUrl(videoMatch[1]) : ''
 
     var bubble = document.createElement('div'); bubble.className = 'msg-bubble'
     if (textWithoutImg) {
       bubble.innerHTML = cleanMarkdown(escHtml(textWithoutImg)).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')
-    } else if (!imgDesc && !parchContent) {
+    } else if (!imgDesc && !parchContent && !videoMatch) {
       bubble.innerHTML = cleanMarkdown(escHtml(text)).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')
+    } else {
+      bubble.style.display = 'none'
     }
     wrapper.appendChild(bubble)
+
+    if (videoUrl) appendLivingVideo(wrapper, videoUrl)
 
     // Carte de parchemin — séparée du texte, avec un bouton Copier qui ne prend QUE
     // le contenu publiable (jamais les mots de l'agent autour).
@@ -574,13 +657,15 @@
 
     var bs = 'padding:2px 9px;border-radius:50px;border:1px solid rgba(123,92,255,0.15);background:rgba(123,92,255,0.04);color:var(--t4);font-family:Outfit,sans-serif;font-size:11px;cursor:pointer;transition:all .15s'
     var acts = document.createElement('div'); acts.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;margin-top:2px'
-    var textForSpeak = textWithoutImg || text
+    var textForSpeak = textWithoutImg || (videoUrl ? '' : text)
+    var exportText = textWithoutImg || (videoUrl ? 'Formation vidéo' : text)
+    if (videoUrl) exportText += '\n\nVidéo : ' + videoUrl
 
     var spk = document.createElement('button'); spk.style.cssText = bs; spk.textContent = '🔊 Écouter'
     spk.addEventListener('click', function() { speakMsg(spk, textForSpeak) }); acts.appendChild(spk)
 
     var cpy = document.createElement('button'); cpy.style.cssText = bs; cpy.textContent = '📋 Copier'
-    cpy.addEventListener('click', function() { navigator.clipboard.writeText(text).then(function() { cpy.textContent = '✓'; setTimeout(function() { cpy.textContent = '📋 Copier' }, 2000) }) }); acts.appendChild(cpy)
+    cpy.addEventListener('click', function() { navigator.clipboard.writeText(exportText).then(function() { cpy.textContent = '✓'; setTimeout(function() { cpy.textContent = '📋 Copier' }, 2000) }) }); acts.appendChild(cpy)
 
     var ret = document.createElement('button'); ret.style.cssText = bs; ret.textContent = '↺ Réessayer'
     ret.addEventListener('click', function() {
@@ -597,7 +682,7 @@
     var pdfBtn = document.createElement('button'); pdfBtn.style.cssText = bs; pdfBtn.textContent = '⬇ PDF'
     pdfBtn.addEventListener('click', function() {
       var w = window.open('', '_blank'); if (!w) return
-      var body = '<h2 style="color:#7B5CFF">' + agentName + ' — NyXia</h2>' + escHtml(text).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')
+      var body = '<h2 style="color:#7B5CFF">' + agentName + ' — NyXia</h2>' + escHtml(exportText).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>')
       w.document.write('<!DOCTYPE html><html><head><title>' + agentName + ' — NyXia</title><style>body{font-family:Georgia,serif;max-width:760px;margin:48px auto;line-height:1.85}</style></head><body>' + body + '</body></html>')
       w.document.close(); setTimeout(function() { w.print() }, 300)
     }); acts.appendChild(pdfBtn)
@@ -805,6 +890,7 @@
       .replace(/[✦💜🚀💎🌐📱⭐✓►▶🪞🌿🕯️🌙✨📖🔥👑😉📚📜]/gu, '')
       .replace(/<br>/g, ' ')
       .replace(/<[^>]+>/g, '')
+      .replace(/\[VIDEO\s*:\s*[^\]\r\n]+\]/gi, '')
       .replace(/`([^`]+)`/g, '$1')
       .trim()
   }
